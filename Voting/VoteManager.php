@@ -43,7 +43,7 @@ class VoteManager
         // Always insert a new vote. When counting, only the last one will be counted.
         // Do not store the exact time of the vote as it is additional identifying information.
         // The autoincrement ID will be used to determine whic is the last vote
-        $this->db->query($this->db->prepare(
+        $inserted = $this->db->query($this->db->prepare(
             "INSERT INTO {$this->db->base_prefix}dapp_votes (voter_id, election_id, encrypted_vote, signature, receipt) VALUES(%d, %s, %s, %s, %s)",
             $vote->voterId,
             $vote->electionId,
@@ -51,6 +51,11 @@ class VoteManager
             $vote->signature,
             $receipt
         ));
+
+        // check if vote inserted (aka. number of rows affected)
+        if ($inserted !== 1) {
+            throw new \Exception($this->db->last_error ?? 'Error saving vote.');
+        }
 
         return $receipt;
     }
@@ -64,6 +69,9 @@ class VoteManager
     public function anonymizeVotes()
     {
         $election = $this->getCurrentElection();
+
+        // first delete all duplicate votes leaving only every user's last vote
+        $this->deleteDuplicates();
 
         // Before anonymization, verify the signature of each vote. If the signature doesn't match, it might mean the vote was tampered with
         $electionID = $election->ID;
@@ -84,6 +92,24 @@ class VoteManager
         $this->db->query("UPDATE {$this->db->base_prefix}dapp_votes SET voter_id = null, signature = null, receipt = null");
 
         return true;
+    }
+
+    private function deleteDuplicates()
+    {
+        $lastVotes = $this->db->get_results("
+            SELECT id FROM {$this->db->base_prefix}dapp_votes
+            WHERE id IN (
+                SELECT MAX(id) AS id
+                FROM wp_dapp_votes
+                GROUP BY voter_id
+            )
+        ");
+
+        $lastVoteIds = implode(array_map(function ($vote) {
+            return $vote->id;
+        }, $lastVotes), ',');
+
+        $this->db->query("DELETE FROM {$this->db->base_prefix}dapp_votes WHERE id NOT IN ($lastVoteIds)");
     }
 
     /**
