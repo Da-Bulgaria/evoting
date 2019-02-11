@@ -12,7 +12,7 @@ $db = $argv[7];
 $table = $argv[8];
 
 $link = mysqli_connect($host, $user, $pass, $db);
-$lastId = file_get_contents("last_id");
+$lastId = file_get_contents("last_id_voting");
 if (!$lastId) {
     $lastId = 0;
 }
@@ -37,7 +37,7 @@ if ($result->num_rows >= 3) {
             $context  = stream_context_create($options);
             file_get_contents($url, false, $context);
             $lastId = $row['id'];
-            file_put_contents("last_id", $lastId);
+            file_put_contents("last_id_voting", $lastId);
         }
     }
 }
